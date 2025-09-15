@@ -74,8 +74,8 @@ if __name__ == "__main__":
         print(f"M={M}, Real={max_time:.6f}, Ideal={T1/M:.6f}, "
               f"Error={abs(analytical_result - total_result):.6e}")
 
-    print("Расчет площадей для N от 1 до 100:")
-    N_values = list(range(1, 100, 1))
+    print("Расчет площадей для N с шагом 24:")
+    N_values = list(range(24, 24 * 24, 24))
     errors_24 = []
     for n in N_values:
         delta_x = (RIGHT_BORDER - LEFT_BORDER) / n
@@ -88,8 +88,8 @@ if __name__ == "__main__":
         with multiprocessing.Pool(processes=24) as pool:
             results = pool.map(worker, tasks)
 
-        total_result = sum([a for a, b in results])
-        error = abs(analytical_result - total_result)
+        total_result = sum(r[0] for r in results)
+        error = analytical_result - total_result
         errors_24.append(error)
         print(f"N={n}, Error={error:.6e}")
 
@@ -103,7 +103,7 @@ if __name__ == "__main__":
     axs[0].set_title(f"Сравнение идеального и условного времени (N={N})")
     axs[0].legend()
     axs[0].grid(True)
-    
+
     # Нижний график: фиксируем M=24, меняем N, считаем погрешность
     axs[1].plot(N_values, errors_24, "go-", label="Погрешность (24 процесса)")
     axs[1].set_xlabel("Количество досочек (N)")
