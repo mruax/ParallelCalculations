@@ -1,16 +1,12 @@
-import math
 import time
 import multiprocessing
 import matplotlib.pyplot as plt
 import numpy as np
 
+# Global variables
 X_MIN, X_MAX = -4.95, 4.95
 Y_MIN, Y_MAX = -5.13, 5.13
 Z_MIN, Z_MAX = -3.34, 3.34
-
-
-def integrand(phi, theta):
-    return R + r * np.cos(phi) + k * np.sin(n * theta)
 
 
 def is_dot_inside_shape(x, y, z):
@@ -44,12 +40,6 @@ def worker_generate_points(point_amount):
 
 if __name__ == "__main__":
     analytical_result = 148.157509543295
-    # X_MIN, X_MAX = -4.915, 4.915
-    # Y_MIN, Y_MAX = -4.391, 5.100
-    # Z_MIN, Z_MAX = -1.500, 1.500
-
-
-    #V_parallelepiped = 440  # 280.06653  # 279.88959
     V_parallelepiped = (abs(X_MAX) + abs(X_MIN)) * (abs(Y_MAX) + abs(Y_MIN)) * (abs(Z_MAX) + abs(Z_MIN))
 
     R = 3
