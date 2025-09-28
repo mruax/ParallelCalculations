@@ -59,9 +59,9 @@ def worker_range(start, end, N, Ad, B, k=4):
 
 
 if __name__ == "__main__":
-    N = 22  # 22
+    N = 12  # 22
 
-    for count in range(8):
+    for count in range(4):
         # Фиксированные коэффициенты
         Ad = -0.2                       # Воля депутата
         B = symmetric_random_matrix(N)  # Взаимоотношения депутатов
@@ -137,7 +137,7 @@ if __name__ == "__main__":
         save_dir.mkdir(parents=True, exist_ok=True)
 
         # Файл для сохранения
-        save_path = save_dir / f"mean_value_vs_T_{count + 1}.png"
+        save_path = save_dir / f"mean_value_vs_T_5_{count + 1}.png"
 
         # Строим график
         fig, ax = plt.subplots(figsize=(10, 6))
