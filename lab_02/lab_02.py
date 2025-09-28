@@ -100,7 +100,7 @@ if __name__ == "__main__":
 
     # ---------------- ГРАФИК №2 ----------------
     print("\nРасчет ошибки для разных N при M=24:")
-    N_values = list(range(24, 24 * 24 * 2, 24))
+    N_values = list(range(100_000, N+1, 100))
     errors_24 = []
 
     for n_points in N_values:
