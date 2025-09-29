@@ -100,10 +100,12 @@ if __name__ == "__main__":
     max_B_value = B[max_B_index]
     n, m = max_B_index[0], max_B_index[1]
 
+    print("\nМатрица Bnm:")
+    for row in B:
+        print([f"{elem:.2f}".rjust(5, "+") for elem in row])
+
     T_values = np.arange(0.001, abs(E1), 0.005)
     mean_values = []
-
-    # print(V1[n], V1[m], V2[n], V2[m], V3[n], V3[m], V4[n], V4[m])
 
     for T in T_values:  # Хаос
         R1 = 1
@@ -122,15 +124,67 @@ if __name__ == "__main__":
                       V2[n] * V2[m] * ro2 +
                       V3[n] * V3[m] * ro3 +
                       V4[n] * V4[m] * ro4)  # в долях
-        # if random.randint(1, 100) == 5:
-        #     print(R1, R2, R3, R4, Z, ro1, ro2, ro3, ro4, mean_value)
         mean_values.append(mean_value)
 
-    # Строим график
-    plt.figure(figsize=(8, 5))
-    plt.plot(T_values, mean_values, color='blue', linewidth=2)
-    plt.title("Зависимость mean_value от T")
-    plt.xlabel("T")
-    plt.ylabel("mean_value (%)")
-    plt.grid(True)
+    # ---------------- ГРАФИК №1 ----------------
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.plot(T_values, mean_values, color='blue', linewidth=2)
+
+    ax.set_title("Зависимость mean_value от T", fontsize=20, fontweight='bold')
+    ax.set_xlabel("T", fontsize=20, fontweight='bold')
+    ax.set_ylabel("mean_value (%)", fontsize=20, fontweight='bold')
+
+    ax.tick_params(axis='both', which='major', labelsize=14)  # подписи осей
+    ax.grid(True)
+
+    plt.show()
+
+    # ---------------- ГРАФИК №2 ----------------
+    print("\nЗамер времени для M процессов от 1 до 24:")
+
+    N_test = 19
+    Ad_test = -0.2
+    B_test = symmetric_random_matrix(N_test)
+    total_votes_test = 2 ** N_test
+
+    M_values = []
+    real_times = []
+    ideal_times = []
+
+    T1 = None  # время одного процесса, будем использовать для идеала
+
+    for M in range(1, 25):
+        chunk_size = total_votes_test // M
+        ranges = [(i * chunk_size,
+                   (i + 1) * chunk_size if i < M - 1 else total_votes_test,
+                   N_test, Ad_test, B_test)
+                  for i in range(M)]
+
+        with multiprocessing.Pool(processes=M) as pool:
+            results = pool.starmap(worker_range, ranges)
+
+        max_time = max(r[1] for r in results)
+
+        if M == 1:
+            T1 = max_time  # эталонное время
+
+        M_values.append(M)
+        real_times.append(max_time)
+        ideal_times.append(T1 / M)
+
+        print(f"M={M}, Real={max_time:.6f}, Ideal={T1 / M:.6f}")
+
+        # Строим график с жирным шрифтом
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.plot(M_values, ideal_times, "bo-", label="Идеальное время (T1/M)")
+    ax.plot(M_values, real_times, "ro-", label="Реальное время (max worker)")
+
+    ax.set_title("Сравнение идеального и реального времени", fontsize=20, fontweight='bold')
+    ax.set_xlabel("Число процессов (M)", fontsize=20, fontweight='bold')
+    ax.set_ylabel("Время, сек", fontsize=20, fontweight='bold')
+
+    ax.tick_params(axis='both', which='major', labelsize=14)
+    ax.legend(fontsize=14)
+    ax.grid(True)
+
     plt.show()
