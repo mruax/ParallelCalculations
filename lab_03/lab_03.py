@@ -1,6 +1,5 @@
 import heapq
 import multiprocessing
-import random
 import time
 
 import matplotlib.pyplot as plt
