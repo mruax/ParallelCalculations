@@ -44,6 +44,8 @@ while не нашли минмальный ищем?
 """
 import multiprocessing
 import time
+from collections import Counter
+from operator import itemgetter
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -92,6 +94,7 @@ def calculate_E(N, A, B, V):
 def worker(N, A, B, count, T):
     """Задача №1"""
     min_E = np.inf
+    V = []
     transitions = {
         2: [1],
         -2: [-1],
@@ -148,7 +151,7 @@ def worker(N, A, B, count, T):
 
     t1 = time.perf_counter()
     elapsed = t1 - t0
-    return [min_E, elapsed]
+    return [min_E, elapsed, V]
 
 
 def worker_task2(N, A, B, T, E_target, stop_event):
@@ -159,6 +162,7 @@ def worker_task2(N, A, B, T, E_target, stop_event):
     """
     min_E = np.inf
     elapsed = 0
+    V = 0
     transitions = {
         2: [1],
         -2: [-1],
@@ -215,7 +219,7 @@ def worker_task2(N, A, B, T, E_target, stop_event):
 
     t1 = time.perf_counter()
     elapsed = t1 - t0
-    return min_E, elapsed
+    return [min_E, elapsed, V]
 
 
 if __name__ == "__main__":
@@ -243,14 +247,19 @@ if __name__ == "__main__":
         remainder = total_tasks % workers
         counts = [base_count + 1 if i < remainder else base_count for i in range(workers)]
         all_tasks = [(N, A, B, count, T) for count in counts]
-        total_elapsed, min_E = 0, np.inf
+        total_elapsed, min_E = np.inf, np.inf
 
         with multiprocessing.Pool(processes=workers) as pool:
             results = pool.starmap(worker, all_tasks)
 
-        for E, elapsed in results:
-            min_E = min(min_E, E)
-            total_elapsed = max(total_elapsed, elapsed)  # min != 0!!!!!!!!
+        conf_res = []
+
+        for E, elapsed, configurations in results:
+            if E < min_E:
+                conf_res = configurations
+                min_E = min(min_E, E)
+            if elapsed != 0:
+                total_elapsed = min(total_elapsed, elapsed)  # min != 0!!!!!!!!
 
         real_times.append(total_elapsed)
         if workers == 1:
@@ -258,7 +267,8 @@ if __name__ == "__main__":
         ideal_times.append(T1 / workers)
         result_min_E = min(result_min_E, min_E)
         print(f"Потоков: {workers:2d} | chunk_size: {base_count:3d} | "
-              f"Время: {total_elapsed:.4f} сек | E_min: {min_E:.4f}")
+              f"Время: {total_elapsed:.4f} сек | E_min: {min_E:.4f} | "
+              f"Топ голосов: {sorted(Counter(conf_res).most_common(5), key=itemgetter(1))}")
     print(f"Минимальное E - {result_min_E:.4f}")
 
     # ---------------- ГРАФИК №1 ----------------
@@ -290,10 +300,14 @@ if __name__ == "__main__":
         with multiprocessing.Pool(processes=workers) as pool:
             results2 = pool.starmap(worker_task2, all_tasks2)
 
+        conf_res2 = []
+
         total_elapsed2 = 0
         min_E2 = np.inf
-        for E, elapsed in results2:
-            min_E2 = min(min_E2, E)
+        for E, elapsed, configurations in results2:
+            if E < min_E2:
+                conf_res2 = configurations
+                min_E2 = min(min_E2, E)
             total_elapsed2 = max(total_elapsed2, elapsed)
 
         real_times2.append(total_elapsed2)
@@ -301,7 +315,8 @@ if __name__ == "__main__":
             T1 = total_elapsed2
         ideal_times2.append(T1 / workers)
         result_min_E2 = min(result_min_E2, min_E2)
-        print(f"Потоков: {workers:2d} | Время: {total_elapsed2:.4f} сек | E_min2: {min_E2:.4f}")
+        print(f"Потоков: {workers:2d} | Время: {total_elapsed2:.4f} сек | "
+              f"E_min2: {min_E2:.4f}  | Топ голосов: {sorted(Counter(conf_res2).most_common(5), key=itemgetter(1))}")
     print(f"Минимальное E2 - {result_min_E2:.4f}")
 
     # ---------------- ГРАФИК №2 ----------------
