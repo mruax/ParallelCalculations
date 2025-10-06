@@ -167,7 +167,7 @@ if __name__ == "__main__":
     A = generate_A(N)  # Коэффициенты воли для депутатов
     B = symmetric_random_matrix(N)  # Матрица коэффициентов взаимодействий для пар депутатов
 
-    processes = 6  # Число процессов
+    processes = 24  # Число процессов
     chunk_size = 10  #
     total_tasks = processes * chunk_size  # Общее кол-во тасков
     T = 200  # Коэффициент хаоса
@@ -177,7 +177,7 @@ if __name__ == "__main__":
     time_real = []
     time_ideal = []
     result_min_E = np.inf
-
+    T0 = 0
     for process in range(1, processes + 1):
         base_count = total_tasks // process
         remainder = total_tasks % process
@@ -192,7 +192,9 @@ if __name__ == "__main__":
         conf_res = min(results, key=lambda x: x[0])[2]  # выбираем конфигурацию с минимальным E
         time_real.append(total_elapsed)
         T1 = total_elapsed if process == 1 else total_elapsed
-        time_ideal.append(T1 / process)
+        if process == 1:
+            T0 = T1
+        time_ideal.append(T0 / process)
         result_min_E = min(result_min_E, min_E)
 
         # выводим топ-5 голосов без np.int64
@@ -226,7 +228,7 @@ if __name__ == "__main__":
 
     # E_target можно взять из задачи 1
     E_target = result_min_E
-
+    T0 = 0
     for process in range(1, processes + 1):
         stop_event = mp.Manager().Event()
         tasks = [(N, A, B, T, E_target, stop_event, 0, 0) for c in range(process)]
@@ -252,7 +254,9 @@ if __name__ == "__main__":
         total_elapsed2 = max([r[1] for r in results] + [0])
         time_real_2.append(total_elapsed2)
         T1 = total_elapsed2 if process == 1 else total_elapsed2
-        time_ideal_2.append(T1 / process)
+        if process == 1:
+            T0 = T1
+        time_ideal_2.append(T0 / process)
         if min_E2 is not None:
             result_min_E_2 = min(result_min_E_2, min_E2)
 
