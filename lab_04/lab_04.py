@@ -52,7 +52,7 @@ import numpy as np
 
 
 def generate_deputies_will(deputies) -> np.ndarray:
-    return np.random.choice([-2, 2, 0], size=deputies)
+    return np.random.uniform(5,10, size=deputies)
 
 
 def generate_deputies_votes(deputies) -> np.ndarray:
@@ -71,7 +71,7 @@ def symmetric_random_matrix(n, seed=None) -> np.ndarray:
     else:
         rng = np.random.default_rng()
     # верхний треугольник без диагонали
-    upper = rng.uniform(-2.0, 2.0, size=(n, n))
+    upper = rng.uniform(-10.0, 10.0, size=(n, n))
     # обнулим нижний треугольник и диагональ (сохраняем только strict upper)
     upper = np.triu(upper, k=1)
     # зеркалим в нижний треугольник
