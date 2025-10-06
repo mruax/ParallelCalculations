@@ -168,7 +168,7 @@ if __name__ == "__main__":
     B = symmetric_random_matrix(N)  # Матрица коэффициентов взаимодействий для пар депутатов
 
     processes = 24  # Число процессов
-    chunk_size = 10  #
+    chunk_size = 1  #
     total_tasks = processes * chunk_size  # Общее кол-во тасков
     T = 200  # Коэффициент хаоса
 
