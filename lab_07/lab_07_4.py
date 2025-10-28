@@ -46,7 +46,7 @@ class MazeNavigationAgent:
         ]
 
         # Подготовка случайных порядков проверки направлений
-        self.prepare_random_orders(10000)
+        self.prepare_random_orders(100000)
         self.current_order_idx = 0
 
         # История для визуализации
@@ -192,7 +192,7 @@ class MazeNavigationAgent:
         print(f"Стартовая позиция: ({entry_x}, {entry_y})")
         print(f"Альфа на старте: {start_alpha:.2f}")
 
-    def prepare_random_orders(self, n_orders: int = 10000):
+    def prepare_random_orders(self, n_orders: int = 100000):
         """Подготовка случайных порядков проверки направлений"""
         self.random_orders = np.zeros((n_orders, 8), dtype=np.int32)
         for i in range(n_orders):
@@ -742,7 +742,7 @@ def experiment_2_scalability(maze_path: str, n_agents: int = 100, max_processes:
                 last_print = iteration
 
             # Защита от бесконечного цикла
-            if iteration > 10000:
+            if iteration > 100000:
                 print(f"Достигнут лимит итераций: {iteration}")
                 break
 
@@ -767,7 +767,7 @@ if __name__ == "__main__":
     import sys
     import os
 
-    maze_path = "maze.png"
+    maze_path = "maze2223.png"
 
     # Проверка существования файла
     if not os.path.exists(maze_path):
@@ -783,17 +783,17 @@ if __name__ == "__main__":
     algo_init = MazeNavigationAgent(maze_path, n_agents=100, seed=42)
     algo_init.visualize_alpha_metric('outputs/alpha_metric.png')
 
-    # # ЭКСПЕРИМЕНТ 1: Масштабируемость
+    # ЭКСПЕРИМЕНТ 1: Масштабируемость
     # max_proc = min(24, cpu_count())
     # print(f"\nМаксимальное количество процессов для тестирования: {max_proc}")
     #
     # scalability_results, iterations_results = experiment_2_scalability(
     #     maze_path, n_agents=100, max_processes=max_proc
     # )
-    #
-    # # Построение графика масштабируемости
+
+    # Построение графика масштабируемости
     # plot_maze_scalability(scalability_results, save_path='outputs/experiment_scalability.png')
-    #
+
     # # Итоговая сводка
     # print("\n" + "=" * 70)
     # print("ИТОГОВАЯ СВОДКА")
@@ -815,11 +815,11 @@ if __name__ == "__main__":
     # best_n_proc = [n for n in scalability_results.keys()
     #                if abs((t1 / scalability_results[n]) - best_speedup) < 0.01][0]
     # print(f"  Оптимальное число процессов: {best_n_proc} (ускорение {best_speedup:.2f}x)")
-
-    print("\n" + "=" * 70)
-    print("ВСЕ ЭКСПЕРИМЕНТЫ ЗАВЕРШЕНЫ!")
-    print("=" * 70)
-    print("\nСохраненные файлы:")
-    print("  - alpha_metric.png - визуализация метрики альфа")
+    #
+    # print("\n" + "=" * 70)
+    # print("ВСЕ ЭКСПЕРИМЕНТЫ ЗАВЕРШЕНЫ!")
+    # print("=" * 70)
+    # print("\nСохраненные файлы:")
+    # print("  - alpha_metric.png - визуализация метрики альфа")
     # print("  - experiment2_scalability.png - график масштабируемости")
-    print("=" * 70)
+    # print("=" * 70)
