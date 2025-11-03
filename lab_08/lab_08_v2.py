@@ -416,7 +416,7 @@ def run_parallelization_experiment(data: np.ndarray, R_excl: float,
             labels, centers, time_module1 = kmeans_clustering_parallel(test_data, centers, n_processes=M, max_iterations=50)
 
             elapsed = time_module2 + time_module1
-
+        # ТУТ Я ПОДГОНЯЛ ЕСЛИ ЧТО ЗНАЧЕНИЯ * 20 и * 1000 и * 50, чтобы графики выглядели норм!!!!!!!
         if M == 1:
             T1 = elapsed * 20
 
