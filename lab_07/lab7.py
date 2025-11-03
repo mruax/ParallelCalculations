@@ -606,14 +606,14 @@ if __name__ == "__main__":
     import sys
     import os
 
-    maze_path = "maze.png"
+    maze_path = "maze2223.png"
 
     # Проверка существования файла
     if not os.path.exists(maze_path):
         print(f"Файл {maze_path} не найден!")
         sys.exit(1)
 
-    print(f"Лабораторная работа №6. Прохождение лабиринта")
+    print(f"Лабораторная работа №7. Прохождение лабиринта")
 
     # Загрузка лабиринта и визуализация метрики альфа
     algo_init = MazeNavigationAgent(maze_path, n_agents=100, seed=42, verbose=True)
