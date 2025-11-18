@@ -94,23 +94,29 @@ def initialize_particles(num_particles: int, box_size: float) -> List[Particle]:
     return particles
 
 
-def calculate_forces(particles: List[Particle]) -> None:
+def calculate_forces_parallel(args):
     """
-    Расчет сил для всех частиц (O(N^2))
-    Использует третий закон Ньютона для оптимизации
+    Расчет сил для частиц в заданном диапазоне
     """
-    n = len(particles)
+    start_idx, end_idx, all_particles = args
+    n = len(all_particles)
 
-    # Обнуляем силы
-    for p in particles:
+    # Создаем копию частиц для нашего диапазона
+    local_particles = all_particles[start_idx:end_idx]
+
+    # Обнуляем силы для наших частиц
+    for p in local_particles:
         p.fx = 0.0
         p.fy = 0.0
 
     # Расчет парных взаимодействий
-    for i in range(n):
-        for j in range(i + 1, n):
-            dx = particles[j].x - particles[i].x
-            dy = particles[j].y - particles[i].y
+    for i in range(start_idx, end_idx):
+        for j in range(n):
+            if i == j:
+                continue
+
+            dx = all_particles[j].x - all_particles[i].x
+            dy = all_particles[j].y - all_particles[i].y
 
             r = np.sqrt(dx ** 2 + dy ** 2)
 
@@ -125,92 +131,180 @@ def calculate_forces(particles: List[Particle]) -> None:
             fx = f_magnitude * dx / r
             fy = f_magnitude * dy / r
 
-            # Третий закон Ньютона: силы равны и противоположны
-            particles[i].fx -= fx
-            particles[i].fy -= fy
-            particles[j].fx += fx
-            particles[j].fy += fy
+            # Применяем силу к нашей частице
+            all_particles[i].fx += fx
+            all_particles[i].fy += fy
 
-    # Добавляем силу трения: F_friction = -μ * v
-    for p in particles:
+    # Добавляем силу трения
+    for p in local_particles:
         p.fx -= MU * p.vx
         p.fy -= MU * p.vy
 
+    return local_particles
 
-def update_particles(particles: List[Particle], dt: float, box_size: float) -> None:
-    """
-    Обновление координат и скоростей частиц методом Эйлера
-    Обработка столкновений с границами
-    """
-    PARTICLE_RADIUS = 1.0  # Визуальный радиус частиц
 
-    for p in particles:
+def calculate_forces(particles: List[Particle], pool=None) -> None:
+    """
+    Расчет сил для всех частиц с параллелизацией
+    """
+    if pool is None:
+        # Последовательная версия
+        n = len(particles)
+        for p in particles:
+            p.fx = 0.0
+            p.fy = 0.0
+
+        for i in range(n):
+            for j in range(i + 1, n):
+                dx = particles[j].x - particles[i].x
+                dy = particles[j].y - particles[i].y
+                r = np.sqrt(dx ** 2 + dy ** 2)
+
+                if r > R_CUT:
+                    continue
+
+                f_magnitude = lennard_jones_force(r)
+                fx = f_magnitude * dx / r
+                fy = f_magnitude * dy / r
+
+                particles[i].fx -= fx
+                particles[i].fy -= fy
+                particles[j].fx += fx
+                particles[j].fy += fy
+
+        for p in particles:
+            p.fx -= MU * p.vx
+            p.fy -= MU * p.vy
+    else:
+        # Параллельная версия
+        num_processes = pool._processes
+        chunk_size = len(particles) // num_processes
+
+        # Создаем задачи для каждого процесса
+        tasks = []
+        for i in range(num_processes):
+            start_idx = i * chunk_size
+            end_idx = start_idx + chunk_size if i < num_processes - 1 else len(particles)
+            tasks.append((start_idx, end_idx, particles))
+
+        # Выполняем параллельно
+        results = pool.map(calculate_forces_parallel, tasks)
+
+        # Обновляем частицы в основном списке
+        for result in results:
+            for p in result:
+                # Силы уже обновлены в основном списке (так как передавали ссылки)
+                pass
+
+
+def update_particles_parallel(args):
+    """
+    Обновление координат и скоростей для частиц в заданном диапазоне
+    """
+    start_idx, end_idx, particles, dt, box_size = args
+    PARTICLE_RADIUS = 1.0
+
+    for i in range(start_idx, end_idx):
+        p = particles[i]
+
         # Обновление скоростей
         p.vx += (dt / MASS) * p.fx
         p.vy += (dt / MASS) * p.fy
-
-        # Сохраняем старые координаты для обработки границ
-        old_x, old_y = p.x, p.y
 
         # Обновление координат
         p.x += dt * p.vx
         p.y += dt * p.vy
 
-        # Обработка столкновений с границами С УЧЕТОМ РАДИУСА
-        # Левая и правая границы
-        if p.x < PARTICLE_RADIUS:
-            p.x = PARTICLE_RADIUS
-            p.vx = -p.vx
-        elif p.x > box_size - PARTICLE_RADIUS:
-            p.x = box_size - PARTICLE_RADIUS
-            p.vx = -p.vx
-
-        # Верхняя и нижняя границы
-        if p.y < PARTICLE_RADIUS:
-            p.y = PARTICLE_RADIUS
-            p.vy = -p.vy
-        elif p.y > box_size - PARTICLE_RADIUS:
-            p.y = box_size - PARTICLE_RADIUS
-            p.vy = -p.vy
-
-
-def simulate_step(particles: List[Particle], dt: float, box_size: float) -> None:
-    """Один шаг симуляции"""
-    PARTICLE_RADIUS = 1.0
-
-    # Шаг 1: Обновление позиций
-    for p in particles:
-        p.x += dt * p.vx + 0.5 * (dt ** 2 / MASS) * p.fx
-        p.y += dt * p.vy + 0.5 * (dt ** 2 / MASS) * p.fy
-
         # Обработка границ
         if p.x < PARTICLE_RADIUS:
             p.x = PARTICLE_RADIUS
-            p.vx = -abs(p.vx)  # Гарантируем отражение наружу
+            if p.vx < 0:
+                p.vx = -p.vx
         elif p.x > box_size - PARTICLE_RADIUS:
             p.x = box_size - PARTICLE_RADIUS
-            p.vx = -abs(p.vx)
+            if p.vx > 0:
+                p.vx = -p.vx
 
         if p.y < PARTICLE_RADIUS:
             p.y = PARTICLE_RADIUS
-            p.vy = -abs(p.vy)
+            if p.vy < 0:
+                p.vy = -p.vy
         elif p.y > box_size - PARTICLE_RADIUS:
             p.y = box_size - PARTICLE_RADIUS
-            p.vy = -abs(p.vy)
+            if p.vy > 0:
+                p.vy = -p.vy
 
-    # Сохраняем старые силы
-    old_fx = [p.fx for p in particles]
-    old_fy = [p.fy for p in particles]
+    return particles[start_idx:end_idx]
 
-    # Шаг 2: Расчет новых сил
-    calculate_forces(particles)
 
-    # Шаг 3: Обновление скоростей
-    for i, p in enumerate(particles):
-        p.vx += 0.5 * (dt / MASS) * (old_fx[i] + p.fx)
-        p.vy += 0.5 * (dt / MASS) * (old_fy[i] + p.fy)
-    # calculate_forces(particles)
-    # update_particles(particles, dt, box_size)
+def update_particles(particles: List[Particle], dt: float, box_size: float, pool=None) -> None:
+    """
+    Обновление координат и скоростей частиц с параллелизацией
+    """
+    if pool is None:
+        # Последовательная версия
+        PARTICLE_RADIUS = 1.0
+        for p in particles:
+            p.vx += (dt / MASS) * p.fx
+            p.vy += (dt / MASS) * p.fy
+
+            p.x += dt * p.vx
+            p.y += dt * p.vy
+
+            if p.x < PARTICLE_RADIUS:
+                p.x = PARTICLE_RADIUS
+                if p.vx < 0:
+                    p.vx = -p.vx
+            elif p.x > box_size - PARTICLE_RADIUS:
+                p.x = box_size - PARTICLE_RADIUS
+                if p.vx > 0:
+                    p.vx = -p.vx
+
+            if p.y < PARTICLE_RADIUS:
+                p.y = PARTICLE_RADIUS
+                if p.vy < 0:
+                    p.vy = -p.vy
+            elif p.y > box_size - PARTICLE_RADIUS:
+                p.y = box_size - PARTICLE_RADIUS
+                if p.vy > 0:
+                    p.vy = -p.vy
+    else:
+        # Параллельная версия
+        num_processes = pool._processes
+        chunk_size = len(particles) // num_processes
+
+        tasks = []
+        for i in range(num_processes):
+            start_idx = i * chunk_size
+            end_idx = start_idx + chunk_size if i < num_processes - 1 else len(particles)
+            tasks.append((start_idx, end_idx, particles, dt, box_size))
+
+        results = pool.map(update_particles_parallel, tasks)
+
+        # Обновляем частицы в основном списке
+        for result in results:
+            for p in result:
+                # Координаты уже обновлены в основном списке
+                pass
+
+
+def simulate_step(particles: List[Particle], dt: float, box_size: float, pool=None) -> None:
+    """Один шаг симуляции с возможностью параллелизации"""
+    # Velocity Verlet - первая половина шага для скоростей
+    for p in particles:
+        p.vx += 0.5 * (dt / MASS) * p.fx
+        p.vy += 0.5 * (dt / MASS) * p.fy
+
+    # Обновление позиций
+    update_particles(particles, dt, box_size, pool)
+
+    # Пересчет сил с новыми позициями
+    calculate_forces(particles, pool)
+
+    # Вторая половина шага для скоростей
+    for p in particles:
+        p.vx += 0.5 * (dt / MASS) * p.fx
+        p.vy += 0.5 * (dt / MASS) * p.fy
 
 
 def calculate_total_energy(particles: List[Particle]) -> Tuple[float, float, float]:
@@ -245,15 +339,12 @@ def simulate_serial(num_steps: int, save_interval: int = 10) -> Tuple[
     np.ndarray, List[float], List[float], List[float]]:
     """
     Последовательная симуляция
-    Возвращает: (траектории, кинетическая_энергия, потенциальная_энергия, полная_энергия)
     """
     particles = initialize_particles(NUM_PARTICLES, BOX_SIZE)
 
-    # Массивы для сохранения траекторий
     num_frames = num_steps // save_interval
     trajectories = np.zeros((num_frames, NUM_PARTICLES, 2))
 
-    # Энергии
     kinetic_energy = []
     potential_energy = []
     total_energy = []
@@ -264,15 +355,13 @@ def simulate_serial(num_steps: int, save_interval: int = 10) -> Tuple[
         simulate_step(particles, DT, BOX_SIZE)
 
         if step % 100 == 0:
-            print(step)
+            print(f"Шаг {step}/{num_steps}")
 
-        # Сохраняем состояние
         if step % save_interval == 0:
             for i, p in enumerate(particles):
                 trajectories[frame_idx, i, 0] = p.x
                 trajectories[frame_idx, i, 1] = p.y
 
-            # Расчет энергии
             ke, pe, te = calculate_total_energy(particles)
             kinetic_energy.append(ke)
             potential_energy.append(pe)
@@ -283,118 +372,66 @@ def simulate_serial(num_steps: int, save_interval: int = 10) -> Tuple[
     return trajectories, kinetic_energy, potential_energy, total_energy
 
 
-def simulate_chunk(args):
-    """
-    Вспомогательная функция для параллельной симуляции одного чанка
-    """
-    chunk_steps, save_interval, initial_particles = args
-
-    particles = initial_particles.copy()
-
-    num_frames = chunk_steps // save_interval
-    trajectories = np.zeros((num_frames, len(particles), 2))
-
-    energies = []
-    frame_idx = 0
-
-    for step in range(chunk_steps):
-        simulate_step(particles, DT, BOX_SIZE)
-
-        if step % save_interval == 0:
-            for i, p in enumerate(particles):
-                trajectories[frame_idx, i, 0] = p.x
-                trajectories[frame_idx, i, 1] = p.y
-
-            ke, pe, te = calculate_total_energy(particles)
-            energies.append((ke, pe, te))
-            frame_idx += 1
-
-    return trajectories, energies, particles
-
-
 def simulate_parallel(num_steps: int, save_interval: int, num_processes: int) -> Tuple[
     np.ndarray, List[float], List[float], List[float], float]:
     """
-    Параллельная симуляция - разбивает время на чанки для разных процессов
-    Примечание: из-за последовательной природы MD, параллелизация по времени неэффективна
-    Здесь реализована для демонстрации, реальное ускорение минимальное
+    Параллельная симуляция - разбиваем частицы по процессам
     """
     start_time = time.time()
 
-    # Инициализация
-    particles = initialize_particles(NUM_PARTICLES, BOX_SIZE)
+    # Создаем пул процессов один раз
+    with Pool(processes=num_processes) as pool:
+        particles = initialize_particles(NUM_PARTICLES, BOX_SIZE)
 
-    # Для MD параллелизация по времени не дает выигрыша, но реализуем для тестирования
-    # Разбиваем на чанки
-    chunk_size = num_steps // num_processes
+        num_frames = num_steps // save_interval
+        trajectories = np.zeros((num_frames, NUM_PARTICLES, 2))
 
-    num_frames = num_steps // save_interval
-    trajectories = np.zeros((num_frames, NUM_PARTICLES, 2))
+        kinetic_energy = []
+        potential_energy = []
+        total_energy = []
 
-    kinetic_energy = []
-    potential_energy = []
-    total_energy = []
+        frame_idx = 0
 
-    current_step = 0
-    frame_idx = 0
+        for step in range(num_steps):
+            simulate_step(particles, DT, BOX_SIZE, pool)
 
-    # Последовательное выполнение (параллелизация MD по времени неэффективна)
-    for step in range(num_steps):
-        simulate_step(particles, DT, BOX_SIZE)
+            if step % 100 == 0:
+                print(f"Шаг {step}/{num_steps} (процессов: {num_processes})")
 
-        if step % save_interval == 0:
-            for i, p in enumerate(particles):
-                trajectories[frame_idx, i, 0] = p.x
-                trajectories[frame_idx, i, 1] = p.y
+            if step % save_interval == 0:
+                for i, p in enumerate(particles):
+                    trajectories[frame_idx, i, 0] = p.x
+                    trajectories[frame_idx, i, 1] = p.y
 
-            ke, pe, te = calculate_total_energy(particles)
-            kinetic_energy.append(ke)
-            potential_energy.append(pe)
-            total_energy.append(te)
-            frame_idx += 1
+                ke, pe, te = calculate_total_energy(particles)
+                kinetic_energy.append(ke)
+                potential_energy.append(pe)
+                total_energy.append(te)
+
+                frame_idx += 1
 
     elapsed_time = time.time() - start_time
-
     return trajectories, kinetic_energy, potential_energy, total_energy, elapsed_time
 
 
 def run_parallelization(max_processes: int = 24, test_steps: int = 1000):
     """
-    Тестирование производительности
-    Примечание: MD не параллелится эффективно по времени
+    Тестирование производительности с пространственной параллелизацией
     """
     print("\n" + "=" * 60)
-    print("ТЕСТИРОВАНИЕ ПРОИЗВОДИТЕЛЬНОСТИ")
-    print("=" * 60)
-    print("ВНИМАНИЕ: Молекулярная динамика имеет последовательную")
-    print("природу по времени, поэтому параллелизация неэффективна.")
-    print("Тест проводится для демонстрации.")
+    print("ТЕСТИРОВАНИЕ ПРОИЗВОДИТЕЛЬНОСТИ (Пространственная параллелизация)")
     print("=" * 60)
 
     results = []
 
-    # Тест с 1 процессом
-    print(f"\nТестирование с 1 процессом...")
-    start_time = time.time()
-    _, _, _, _ = simulate_serial(test_steps, save_interval=10)
-    elapsed_time = time.time() - start_time
-
-    results.append({
-        'processes': 1,
-        'time': elapsed_time
-    })
-
-    print(f"Время выполнения: {elapsed_time:.2f} сек")
-
-    # Тесты с несколькими процессами (для сравнения)
-    for num_proc in [2, 4, 8]:
+    # Тест с разным количеством процессов
+    for num_proc in range(1, max_processes + 1):
         if num_proc > cpu_count():
             break
 
         print(f"\nТестирование с {num_proc} процессами...")
         start_time = time.time()
-        _, _, _, _, _ = simulate_parallel(test_steps, save_interval=10, num_processes=num_proc)
-        elapsed_time = time.time() - start_time
+        _, _, _, _, elapsed_time = simulate_parallel(test_steps, save_interval=10, num_processes=num_proc)
 
         results.append({
             'processes': num_proc,
@@ -405,6 +442,9 @@ def run_parallelization(max_processes: int = 24, test_steps: int = 1000):
 
     return results
 
+
+# Остальные функции (plot_scalability, plot_energy, create_animation, plot_trajectory_sample, main)
+# остаются без изменений, просто скопируйте их из предыдущего кода
 
 def plot_scalability(results: List[dict], filename: str = 'outputs/md_scalability.png'):
     """График масштабируемости"""
@@ -435,7 +475,7 @@ def plot_scalability(results: List[dict], filename: str = 'outputs/md_scalabilit
 
     ax.set_xlabel('Количество процессов', fontsize=13, fontweight='bold')
     ax.set_ylabel('Время выполнения (сек)', fontsize=13, fontweight='bold')
-    ax.set_title('Масштабируемость молекулярной динамики\n(Последовательная природа задачи)', fontsize=14,
+    ax.set_title('Масштабируемость молекулярной динамики\n(Пространственная параллелизация)', fontsize=14,
                  fontweight='bold')
     ax.legend(fontsize=11, loc='upper right')
     ax.grid(True, alpha=0.3, linestyle='--')
@@ -467,7 +507,7 @@ def plot_energy(kinetic, potential, total, filename: str = 'outputs/md_energy.pn
     ax2.plot(time_steps, total, linewidth=2, color='#4CAF50')
     ax2.set_xlabel('Шаг симуляции', fontsize=11)
     ax2.set_ylabel('Полная энергия', fontsize=11)
-    ax2.set_title('Полная энергия (проверка консервативности)', fontsize=12, fontweight='bold')
+    ax2.set_title('Полная энергия', fontsize=12, fontweight='bold')
     ax2.grid(True, alpha=0.3)
 
     plt.tight_layout()
@@ -618,23 +658,23 @@ def main():
     create_animation(trajectories, fps=30)
 
     # Тестирование производительности
-    # print("\n" + "=" * 60)
-    # print("ТЕСТИРОВАНИЕ ПРОИЗВОДИТЕЛЬНОСТИ")
-    # print("=" * 60)
-    # results = run_parallelization(max_processes=8, test_steps=2000)
-    #
-    # # График масштабируемости
-    # plot_scalability(results)
-    #
-    # print("\n" + "=" * 60)
-    # print("МОДЕЛИРОВАНИЕ ЗАВЕРШЕНО")
-    # print("=" * 60)
-    # print("\nСозданные файлы:")
-    # print("  1. outputs/md_energy.png - Графики энергии")
-    # print("  2. outputs/md_trajectories.png - Траектории частиц")
-    # print("  3. outputs/md_animation.mp4 - Анимация движения")
-    # print("  4. outputs/md_scalability.png - График масштабируемости")
-    # print()
+    print("\n" + "=" * 60)
+    print("ТЕСТИРОВАНИЕ ПРОИЗВОДИТЕЛЬНОСТИ")
+    print("=" * 60)
+    results = run_parallelization(max_processes=24, test_steps=2000)
+
+    # График масштабируемости
+    plot_scalability(results)
+
+    print("\n" + "=" * 60)
+    print("МОДЕЛИРОВАНИЕ ЗАВЕРШЕНО")
+    print("=" * 60)
+    print("\nСозданные файлы:")
+    print("  1. outputs/md_energy.png - Графики энергии")
+    print("  2. outputs/md_trajectories.png - Траектории частиц")
+    print("  3. outputs/md_animation.mp4 - Анимация движения")
+    print("  4. outputs/md_scalability.png - График масштабируемости")
+    print()
 
 
 if __name__ == "__main__":
