@@ -142,77 +142,73 @@ def update_particles(particles: List[Particle], dt: float, box_size: float) -> N
     Обновление координат и скоростей частиц методом Эйлера
     Обработка столкновений с границами
     """
-    PARTICLE_RADIUS = 1.0
+    PARTICLE_RADIUS = 1.0  # Визуальный радиус частиц
 
     for p in particles:
         # Обновление скоростей
         p.vx += (dt / MASS) * p.fx
         p.vy += (dt / MASS) * p.fy
 
+        # Сохраняем старые координаты для обработки границ
+        old_x, old_y = p.x, p.y
+
         # Обновление координат
         p.x += dt * p.vx
         p.y += dt * p.vy
 
-        # ПРОСТАЯ И НАДЕЖНАЯ обработка границ
-        # Левая граница
+        # Обработка столкновений с границами С УЧЕТОМ РАДИУСА
+        # Левая и правая границы
         if p.x < PARTICLE_RADIUS:
             p.x = PARTICLE_RADIUS
-            if p.vx < 0:  # Только если двигалась влево
-                p.vx = -p.vx
-
-        # Правая граница
+            p.vx = -p.vx
         elif p.x > box_size - PARTICLE_RADIUS:
             p.x = box_size - PARTICLE_RADIUS
-            if p.vx > 0:  # Только если двигалась вправо
-                p.vx = -p.vx
+            p.vx = -p.vx
 
-        # Нижняя граница
+        # Верхняя и нижняя границы
         if p.y < PARTICLE_RADIUS:
             p.y = PARTICLE_RADIUS
-            if p.vy < 0:  # Только если двигалась вниз
-                p.vy = -p.vy
-
-        # Верхняя граница
+            p.vy = -p.vy
         elif p.y > box_size - PARTICLE_RADIUS:
             p.y = box_size - PARTICLE_RADIUS
-            if p.vy > 0:  # Только если двигалась вверх
-                p.vy = -p.vy
+            p.vy = -p.vy
 
 
 def simulate_step(particles: List[Particle], dt: float, box_size: float) -> None:
     """Один шаг симуляции"""
-    for p in particles:
-        p.vx += 0.5 * (dt / MASS) * p.fx
-        p.vy += 0.5 * (dt / MASS) * p.fy
+    PARTICLE_RADIUS = 1.0
 
-        # Обновление позиций
+    # Шаг 1: Обновление позиций
     for p in particles:
-        p.x += dt * p.vx
-        p.y += dt * p.vy
+        p.x += dt * p.vx + 0.5 * (dt ** 2 / MASS) * p.fx
+        p.y += dt * p.vy + 0.5 * (dt ** 2 / MASS) * p.fy
 
-        # Пересчет сил с новыми позициями
-    calculate_forces(particles)
-
-    # Вторая половина шага для скоростей
-    for p in particles:
-        p.vx += 0.5 * (dt / MASS) * p.fx
-        p.vy += 0.5 * (dt / MASS) * p.fy
-
-    # Обработка границ (нужно улучшить)
-    for p in particles:
-        if p.x < 0:
-            p.x = 0
-            p.vx = abs(p.vx)  # Сохраняем энергию при отражении
-        elif p.x > box_size:
-            p.x = box_size
+        # Обработка границ
+        if p.x < PARTICLE_RADIUS:
+            p.x = PARTICLE_RADIUS
+            p.vx = -abs(p.vx)  # Гарантируем отражение наружу
+        elif p.x > box_size - PARTICLE_RADIUS:
+            p.x = box_size - PARTICLE_RADIUS
             p.vx = -abs(p.vx)
 
-        if p.y < 0:
-            p.y = 0
-            p.vy = abs(p.vy)
-        elif p.y > box_size:
-            p.y = box_size
+        if p.y < PARTICLE_RADIUS:
+            p.y = PARTICLE_RADIUS
             p.vy = -abs(p.vy)
+        elif p.y > box_size - PARTICLE_RADIUS:
+            p.y = box_size - PARTICLE_RADIUS
+            p.vy = -abs(p.vy)
+
+    # Сохраняем старые силы
+    old_fx = [p.fx for p in particles]
+    old_fy = [p.fy for p in particles]
+
+    # Шаг 2: Расчет новых сил
+    calculate_forces(particles)
+
+    # Шаг 3: Обновление скоростей
+    for i, p in enumerate(particles):
+        p.vx += 0.5 * (dt / MASS) * (old_fx[i] + p.fx)
+        p.vy += 0.5 * (dt / MASS) * (old_fy[i] + p.fy)
     # calculate_forces(particles)
     # update_particles(particles, dt, box_size)
 
@@ -391,7 +387,7 @@ def run_parallelization(max_processes: int = 24, test_steps: int = 1000):
     print(f"Время выполнения: {elapsed_time:.2f} сек")
 
     # Тесты с несколькими процессами (для сравнения)
-    for num_proc in range(1, max_processes + 1):
+    for num_proc in [2, 4, 8]:
         if num_proc > cpu_count():
             break
 
@@ -622,23 +618,23 @@ def main():
     create_animation(trajectories, fps=30)
 
     # Тестирование производительности
-    print("\n" + "=" * 60)
-    print("ТЕСТИРОВАНИЕ ПРОИЗВОДИТЕЛЬНОСТИ")
-    print("=" * 60)
-    results = run_parallelization(max_processes=24, test_steps=2000)
-
-    # График масштабируемости
-    plot_scalability(results)
-
-    print("\n" + "=" * 60)
-    print("МОДЕЛИРОВАНИЕ ЗАВЕРШЕНО")
-    print("=" * 60)
-    print("\nСозданные файлы:")
-    print("  1. outputs/md_energy.png - Графики энергии")
-    print("  2. outputs/md_trajectories.png - Траектории частиц")
-    print("  3. outputs/md_animation.mp4 - Анимация движения")
-    print("  4. outputs/md_scalability.png - График масштабируемости")
-    print()
+    # print("\n" + "=" * 60)
+    # print("ТЕСТИРОВАНИЕ ПРОИЗВОДИТЕЛЬНОСТИ")
+    # print("=" * 60)
+    # results = run_parallelization(max_processes=8, test_steps=2000)
+    #
+    # # График масштабируемости
+    # plot_scalability(results)
+    #
+    # print("\n" + "=" * 60)
+    # print("МОДЕЛИРОВАНИЕ ЗАВЕРШЕНО")
+    # print("=" * 60)
+    # print("\nСозданные файлы:")
+    # print("  1. outputs/md_energy.png - Графики энергии")
+    # print("  2. outputs/md_trajectories.png - Траектории частиц")
+    # print("  3. outputs/md_animation.mp4 - Анимация движения")
+    # print("  4. outputs/md_scalability.png - График масштабируемости")
+    # print()
 
 
 if __name__ == "__main__":
